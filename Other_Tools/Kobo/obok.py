@@ -358,6 +358,8 @@ class KoboLibrary(object):
                 self.kobodir = os.path.join(self.kobodir, "Kobo", "Kobo Desktop Edition")
             elif sys.platform.startswith('darwin'):
                 self.kobodir = os.path.join(os.environ['HOME'], "Library", "Application Support", "Kobo", "Kobo Desktop Edition")
+            elif sys.platform.startswith('linux'):
+                self.kobodir = os.path.join(os.environ['HOME'], ".wine", "drive_c", "Program Files (x86)", "Kobo", "fonts")
             #elif linux_path != None:
                 # Probably Linux, let's get the wine prefix and path to Kobo.
             #   self.kobodir = os.path.join(linux_path, "Local Settings", "Application Data", "Kobo", "Kobo Desktop Edition")
@@ -415,7 +417,7 @@ class KoboLibrary(object):
             return self._books
         """Drm-ed kepub"""
         for row in self.__cursor.execute('SELECT DISTINCT volumeid, Title, Attribution, Series FROM content_keys, content WHERE contentid = volumeid'):
-            self._books.append(KoboBook(row[0], row[1], self.__bookfile(row[0]), 'kepub', self.__cursor, author=row[2], series=row[3]))
+            self._books.append(KoboBook(row[0], row[1].encode('utf-8'), self.__bookfile(row[0]), 'kepub', self.__cursor, author=row[2], series=row[3]))
             self._volumeID.append(row[0])
         """Drm-free"""
         for f in os.listdir(self.bookdir):
@@ -423,7 +425,7 @@ class KoboLibrary(object):
                 row = self.__cursor.execute("SELECT Title, Attribution, Series FROM content WHERE ContentID = '" + f + "'").fetchone()
                 if row is not None:
                     fTitle = row[0]
-                    self._books.append(KoboBook(f, fTitle, self.__bookfile(f), 'drm-free', self.__cursor, author=row[1], series=row[2]))
+                    self._books.append(KoboBook(f, fTitle.encode('utf-8'), self.__bookfile(f), 'drm-free', self.__cursor, author=row[1], series=row[2]))
                     self._volumeID.append(f)
         """Sort"""
         self._books.sort(key=lambda x: x.title)
@@ -452,7 +454,7 @@ class KoboLibrary(object):
                 macaddrs.append(m[0].upper())
         elif sys.platform.startswith('linux'):
             p_out = subprocess.check_output("ip -br link show | awk '{print $3}'", shell=True)
-            for line in p_out:
+            for line in p_out.split('\n'):
               macaddrs.append(line.upper())
         else:
             # probably linux, let's try ipconfig under wine
@@ -670,11 +672,18 @@ class KoboFile(object):
             contents = contents[:-padding]
         return contents
 
+def get_valid_filename(s):
+    banned_chars = ['<', '>', ':', '"', '|', '?', '*']
+    for c in banned_chars:
+        s = s.replace(c, '_')
+    return s
+
 def decrypt_book(book, lib):
     print("Converting {0}".format(book.title))
     zin = zipfile.ZipFile(book.filename, "r")
     # make filename out of Unicode alphanumeric and whitespace equivalents from title
-    outname = "{0}.epub".format(re.sub('[^\s\w]', '_', book.title, 0, re.UNICODE))
+    valid_filename = get_valid_filename(book.title)
+    outname = "{0}.epub".format(valid_filename[:250] if len(valid_filename) > 250 else valid_filename)
     if (book.type == 'drm-free'):
         print("DRM-free book, conversion is not needed")
         shutil.copyfile(book.filename, outname)
