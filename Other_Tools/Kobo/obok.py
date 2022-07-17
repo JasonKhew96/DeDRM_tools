@@ -680,10 +680,17 @@ def get_valid_filename(s):
 
 def decrypt_book(book, lib):
     print("Converting {0}".format(book.title))
-    zin = zipfile.ZipFile(book.filename, "r")
+    try:
+        zin = zipfile.ZipFile(book.filename, "r")
+    except IOError as e:
+        print("Error opening {0}: {1}".format(book.filename, e))
+        return 0
     # make filename out of Unicode alphanumeric and whitespace equivalents from title
     valid_filename = get_valid_filename(book.title)
     outname = "{0}.epub".format(valid_filename[:250] if len(valid_filename) > 250 else valid_filename)
+    if os.path.exists(outname):
+        print("{0} already exists, skipping".format(outname))
+        return 0
     if (book.type == 'drm-free'):
         print("DRM-free book, conversion is not needed")
         shutil.copyfile(book.filename, outname)
